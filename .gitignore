@@ -1,0 +1,18 @@
+# Python Virtual Environment
+.venv/
+.python-version
+
+# Streamlit Secrets (API 키, GCP 서비스 계정 정보 포함)
+.streamlit/secrets.toml
+
+# Python Cache and Build Files
+__pycache__/
+*.pyc
+dist/
+*.egg-info/
+
+# macOS files
+.DS_Store
+
+# Google Cloud Service Account JSON (로컬에 저장했다면)
+*.json
