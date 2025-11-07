@@ -1,7 +1,6 @@
-# src/spell_corrector.py (수정된 최종 코드)
 import streamlit as st
-import google.generativeai as genai
-# ✅ 새로 만든 모듈 import
+import google.genai as genai
+# json_corrector 모듈이 src 폴더에 있으므로 src.json_corrector로 수정
 from src.json_corrector import analyze_and_correct_to_json 
 import json 
 
@@ -49,10 +48,9 @@ def format_json_result_to_text(json_data):
 def correct_text(text: str, mode: str = "맞춤법 교정") -> str:
     """Gemini API를 사용해 텍스트 맞춤법/문법 교정"""
     
-    # 🟢 "맞춤법 교정" 모드를 JSON 분석 기능으로 연결
+    # 🟢 "맞춤법 교정" 모드는 JSON 분석 기능으로 연결됨
     if mode == "맞춤법 교정":
         json_data = analyze_and_correct_to_json(text)
-        # JSON 결과를 텍스트로 변환하여 main_app.py에 반환
         return format_json_result_to_text(json_data)
         
     # ----------------------------------------------------------------------
@@ -65,15 +63,13 @@ def correct_text(text: str, mode: str = "맞춤법 교정") -> str:
         return "❌ Gemini API 오류: '.streamlit/secrets.toml'에서 [gemini] 섹션 또는 'api_key' 키를 찾을 수 없습니다."
     
     try:
-        genai.configure(api_key=api_key)
-        # ✅ 모델 이름을 일관성 있게 변경 (gemini-2.5-flash)
-        model = genai.GenerativeModel("gemini-2.5-flash") 
+        # ✅ SDK 오류 해결: Client 방식으로 변경
+        client = genai.Client(api_key=api_key) 
     except Exception as e:
         return f"❌ Gemini 클라이언트 초기화 실패: {e}"
 
 
     prompts = {
-        # "맞춤법 교정" 모드는 이제 위에서 처리됩니다.
         "문장 자연스럽게 다듬기": (
             f"다음 텍스트를 읽고, 내용의 핵심을 유지하면서 한국인이 보기에 가장 자연스럽고 세련된 문장으로 다듬어주세요. "
             f"수정된 결과만 출력해:\n\n{text}"
@@ -82,15 +78,17 @@ def correct_text(text: str, mode: str = "맞춤법 교정") -> str:
         "영어 번역": f"다음 텍스트를 전문적인 비즈니스 영어로 번역해주세요. 번역된 결과만 출력해:\n\n{text}"
     }
 
-    selected_prompt = prompts.get(mode) # "맞춤법 교정"이 프롬프트에서 제거됨
+    selected_prompt = prompts.get(mode) 
 
-    # 만약 맞춤법 교정 외의 모드를 선택했다면
     if selected_prompt:
         try:
-            response = model.generate_content(selected_prompt)
+            # ✅ Client.models.generate_content 사용
+            response = client.models.generate_content(
+                model="gemini-2.5-flash", # gemini-2.5-flash 모델 사용
+                contents=selected_prompt
+            )
             return response.text
         except Exception as e:
             return f"❌ Gemini API 호출 오류: {e}"
     else:
-        # 이전에 처리되지 않은 모드가 넘어오면 오류 메시지 반환
         return f"❌ 정의되지 않은 교정 모드: {mode}"

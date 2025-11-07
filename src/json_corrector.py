@@ -1,12 +1,11 @@
-# src/json_corrector.py
 import streamlit as st
-import google.generativeai as genai
+import google.genai as genai
+from google.genai.types import GenerateContentConfig # JSON Config 클래스 import
 import json
 
 # ----------------------------------------------------------------------
 # 📝 JSON 출력 스키마 정의
 # ----------------------------------------------------------------------
-# Gemini 모델에게 요청할 JSON의 구조를 문자열로 명시합니다.
 JSON_SCHEMA = """
 [
   {
@@ -32,19 +31,17 @@ def analyze_and_correct_to_json(text: str):
     텍스트를 분석하여 맞춤법 오류를 찾아 JSON 구조로 반환합니다.
     """
     try:
-        # ✅ 키 로드 (secrets.toml의 [gemini] api_key와 일치)
+        # ✅ API 키 경로 통일: st.secrets["gemini"]["api_key"] 사용
         api_key = st.secrets["gemini"]["api_key"]
     except KeyError:
         return {"error": "Gemini API 오류: '.streamlit/secrets.toml'에서 [gemini] 섹션 또는 'api_key' 키를 찾을 수 없습니다."}
     
     try:
-        genai.configure(api_key=api_key)
-        # ✅ JSON 출력에 안정적인 최신 모델 사용
-        model = genai.GenerativeModel("gemini-2.5-flash") 
+        # ✅ SDK 오류 해결: Client 방식으로 변경
+        client = genai.Client(api_key=api_key) 
     except Exception as e:
         return {"error": f"Gemini 클라이언트 초기화 실패: {e}"}
 
-    # 1. 프롬프트 구성 (역할 부여 및 JSON 스키마 명시)
     prompt = (
         f"당신은 한국어 맞춤법 및 문법 분석 전문가입니다. "
         f"다음 텍스트를 문장 단위로 나누어 분석하고, 모든 오류(맞춤법, 띄어쓰기, 문법)를 찾아 {JSON_SCHEMA} 형식의 JSON 배열로만 반환하세요. "
@@ -52,28 +49,22 @@ def analyze_and_correct_to_json(text: str):
         f"반드시 JSON만 출력해야 합니다. 원본 텍스트:\n\n{text}"
     )
 
-    # 🟢 UnboundLocalError 해결: response 변수를 미리 None으로 초기화
-    response = None 
-    
     try:
-        # 2. Gemini API 호출 (JSON 출력 강제 옵션 사용)
-        response = model.generate_content(
+        # 2. Gemini API 호출 (Client.models.generate_content 사용)
+        response = client.models.generate_content(
+            model='gemini-2.5-flash', # gemini-2.5-flash 모델 사용
             contents=prompt,
-            config=genai.types.GenerateContentConfig(
+            config=GenerateContentConfig(
                 response_mime_type="application/json"
             )
         )
         
-        # 3. 모델이 반환한 JSON 문자열을 파이썬 객체로 변환
         json_data = json.loads(response.text)
         return json_data
         
     except Exception as e:
-        # 🟢 response가 None이 아닐 때만 .text에 접근하여 오류 메시지 구성
+        # 오류 발생 시 response 객체가 없을 수 있으므로 안전하게 처리
         error_msg = f"Gemini JSON API 호출 오류: {e}"
-        if response is not None:
+        if 'response' in locals() and hasattr(response, 'text'):
              error_msg += f" (응답 텍스트: {response.text[:50]}...)"
-             
-        # JSON 파싱 실패 시, 모델이 JSON이 아닌 텍스트를 반환했을 가능성이 높으므로, 
-        # API 오류 대신 JSON 파싱 오류 메시지를 포함하여 반환합니다.
         return {"error": error_msg}

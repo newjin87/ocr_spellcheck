@@ -11,6 +11,7 @@ Streamlit 통합 실행 파일
 """
 
 import streamlit as st
+# ✅ 필수 수정 사항: src 폴더에서 모듈을 가져오도록 경로 수정
 from src.vision_ocr import run_ocr_pipeline
 from src.spell_corrector import correct_text
 
@@ -55,7 +56,14 @@ if uploaded_file:
             with st.spinner("Gemini가 교정 중입니다... ⏳"):
                 result = correct_text(extracted_text, mode)
                 st.success("✅ 교정 완료!")
+                
+                # 💬 교정 결과 표시 (텍스트 영역)
                 st.text_area("💬 교정 결과", result, height=250)
+                
+                # 복사 버튼 기능: st.code의 Copy 버튼 활용
+                st.code(result, language="text", line_numbers=False)
+                st.markdown("👆 위의 코드 블록 오른쪽에 있는 **Copy** 버튼을 사용하여 교정 결과를 복사하세요.")
+
     else:
         st.error("❌ OCR에서 텍스트를 추출하지 못했습니다. 로그를 확인하세요.")
 
