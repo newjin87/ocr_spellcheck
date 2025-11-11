@@ -2,6 +2,9 @@
 import streamlit as st
 import google.generativeai as genai
 import json
+import time
+import re
+import traceback
 
 # ----------------------------------------------------------------------
 # 📝 JSON 출력 스키마 정의
@@ -53,27 +56,75 @@ def analyze_and_correct_to_json(text: str):
     )
 
     # 🟢 UnboundLocalError 해결: response 변수를 미리 None으로 초기화
-    response = None 
-    
-    try:
-        # 2. Gemini API 호출 (JSON 출력 강제 옵션 사용)
-        response = model.generate_content(
-            contents=prompt,
-            config=genai.types.GenerateContentConfig(
-                response_mime_type="application/json"
-            )
-        )
-        
-        # 3. 모델이 반환한 JSON 문자열을 파이썬 객체로 변환
-        json_data = json.loads(response.text)
-        return json_data
-        
-    except Exception as e:
-        # 🟢 response가 None이 아닐 때만 .text에 접근하여 오류 메시지 구성
-        error_msg = f"Gemini JSON API 호출 오류: {e}"
-        if response is not None:
-             error_msg += f" (응답 텍스트: {response.text[:50]}...)"
-             
-        # JSON 파싱 실패 시, 모델이 JSON이 아닌 텍스트를 반환했을 가능성이 높으므로, 
-        # API 오류 대신 JSON 파싱 오류 메시지를 포함하여 반환합니다.
-        return {"error": error_msg}
+    response = None
+
+    # 안전한 JSON 파싱 유틸리티: 문자열에서 JSON 배열/객체 부분을 추출해 파싱 시도
+    def try_parse_json(text: str):
+        text = text.strip()
+        # 빠른 시도
+        try:
+            return json.loads(text)
+        except Exception:
+            pass
+
+        # 배열 또는 객체의 첫/마지막 괄호 위치를 찾아 부분 문자열로 파싱 시도
+        # 우선 배열 '[ ... ]' 탐색
+        arr_match = re.search(r"(\[.*\])", text, re.S)
+        if arr_match:
+            try:
+                return json.loads(arr_match.group(1))
+            except Exception:
+                pass
+
+        # 객체 '{ ... }' 탐색
+        obj_match = re.search(r"(\{.*\})", text, re.S)
+        if obj_match:
+            try:
+                return json.loads(obj_match.group(1))
+            except Exception:
+                pass
+
+        # 실패
+        raise ValueError("응답에서 JSON을 파싱할 수 없습니다.")
+
+    # 재시도/백오프 설정
+    max_retries = 3
+    base_delay = 1.0
+
+    last_exc = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            # 2. Gemini API 호출
+            response = model.generate_content(contents=prompt)
+
+            # 3. 모델이 반환한 JSON 문자열을 파이썬 객체로 변환
+            if hasattr(response, 'text') and response.text:
+                try:
+                    json_data = try_parse_json(response.text)
+                    return json_data
+                except Exception as parse_err:
+                    # 파싱 실패는 재시도하지 않고 오류로 반환 (모델 출력 교정 필요)
+                    tb = traceback.format_exc()
+                    return {"error": f"JSON 파싱 실패: {parse_err}. 응답 일부: {response.text[:200]}", "trace": tb}
+            else:
+                # 응답이 비어있는 경우 재시도
+                raise RuntimeError("응답 텍스트가 비어있습니다.")
+
+        except Exception as e:
+            last_exc = e
+            # 내부 서버 오류(500)등 일시적 오류일 경우 재시도
+            if attempt < max_retries:
+                delay = base_delay * (2 ** (attempt - 1))
+                time.sleep(delay)
+                continue
+            else:
+                # 최대 재시도 후 실패: 더 자세한 정보 반환
+                resp_snippet = None
+                try:
+                    if response is not None and hasattr(response, 'text'):
+                        resp_snippet = response.text[:300]
+                except Exception:
+                    resp_snippet = None
+
+                tb = traceback.format_exc()
+                return {"error": f"Gemini JSON API 호출 오류 (attempts={max_retries}): {e}", "response_snippet": resp_snippet, "trace": tb}
