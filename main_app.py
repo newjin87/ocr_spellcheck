@@ -139,15 +139,20 @@ if uploaded_file:
                     with col2:
                         if st.button("🔎 다시 검사", key="recheck_spell", use_container_width=True):
                             with st.spinner("재검사 중..."):
+                                # 편집된 글을 기반으로 새로운 맞춤법 검사 수행
                                 recheck = analyze_and_correct_to_json(edited_spell)
                                 if isinstance(recheck, dict) and 'error' in recheck:
                                     st.error(f"오류: {recheck['error']}")
                                 else:
+                                    # 새로운 결과로 업데이트
+                                    st.session_state['spell_check_result'] = recheck
+                                    st.session_state['draft_after_spell'] = edited_spell
                                     remaining = [it for it in recheck if not it.get('is_correct')]
                                     if not remaining:
                                         st.success("🟢 재검사 완료: 오류 없음")
                                     else:
                                         st.warning(f"⚠️ 여전히 {len(remaining)}개 문장에 오류가 있습니다.")
+                                    st.rerun()
                     with col3:
                         if st.button("➡️ 다음 단계로", key="next_from_spell", use_container_width=True):
                             st.session_state['draft_after_spell'] = edited_spell
@@ -162,10 +167,11 @@ if uploaded_file:
         with tab3:
             st.subheader("✍️ 글쓰기 교정")
             
-            if st.session_state.get('proceed_to_writing', False) or st.session_state.get('workflow_started', False):
-                # 글쓰기 교정 실행
-                if 'draft_after_writing' not in st.session_state:
+            if st.session_state.get('proceed_to_writing', False):
+                # 글쓰기 교정 실행 (맞춤법 교정 후 저장된 글을 기반으로)
+                if 'draft_after_writing' not in st.session_state or 'writing_feedback_for_current' not in st.session_state:
                     with st.spinner("글쓰기 교정 중입니다... ⏳"):
+                        # 맞춤법 교정에서 저장된 글을 기반으로 교정 진행
                         current_draft = st.session_state.get('draft_after_spell', st.session_state['original_text'])
                         writing_feedback = correct_text(current_draft, "글쓰기 교정")
                         
@@ -173,12 +179,12 @@ if uploaded_file:
                             st.error(f"❌ 오류: {writing_feedback['error']}")
                         else:
                             st.session_state['draft_after_writing'] = current_draft
-                            st.session_state['writing_feedback'] = writing_feedback
+                            st.session_state['writing_feedback_for_current'] = writing_feedback
                 
                 # 글쓰기 교정 피드백 표시
-                if 'writing_feedback' in st.session_state:
+                if 'writing_feedback_for_current' in st.session_state:
                     st.subheader("📝 교사 평가 및 고쳐쓰기 제안")
-                    feedback = st.session_state['writing_feedback']
+                    feedback = st.session_state['writing_feedback_for_current']
                     st.text_area(
                         "평가 및 제안 (읽기 전용):",
                         value=feedback if isinstance(feedback, str) else str(feedback),
@@ -204,16 +210,16 @@ if uploaded_file:
                 with col2:
                     if st.button("🔎 다시 평가", key="recheck_writing", use_container_width=True):
                         with st.spinner("재평가 중..."):
+                            # 편집된 글을 기반으로 새로운 피드백 생성
                             refeedback = correct_text(edited_writing, "글쓰기 교정")
                             if isinstance(refeedback, dict) and 'error' in refeedback:
                                 st.error(f"오류: {refeedback['error']}")
                             else:
-                                st.text_area(
-                                    "재평가 결과:",
-                                    value=refeedback if isinstance(refeedback, str) else str(refeedback),
-                                    height=200,
-                                    disabled=True
-                                )
+                                # 새로운 피드백으로 업데이트
+                                st.session_state['writing_feedback_for_current'] = refeedback
+                                st.session_state['draft_after_writing'] = edited_writing
+                                st.success("✅ 재평가 완료! 위의 평가 섹션을 확인하세요.")
+                                st.rerun()
                 with col3:
                     if st.button("✅ 완성!", key="finish_workflow", use_container_width=True):
                         st.session_state['draft_after_writing'] = edited_writing
