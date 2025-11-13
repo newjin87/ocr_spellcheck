@@ -87,7 +87,8 @@ if uploaded_file:
         # 모달 팝업: 맞춤법 교정 + 글쓰기 교정 워크플로우
         # ============================================================
         if st.session_state.get('show_workflow_modal', False):
-            with st.dialog("🚀 글 고쳐쓰기 워크플로우", width="large"):
+            @st.dialog("🚀 글 고쳐쓰기 워크플로우", width="large")
+            def show_workflow_modal():
                 # 탭 2개: 맞춤법 교정, 글쓰기 교정
                 modal_tab1, modal_tab2 = st.tabs(["🔍 맞춤법 교정", "✍️ 글쓰기 교정"])
                 
@@ -230,6 +231,9 @@ if uploaded_file:
                                 st.rerun()
                     else:
                         st.info("ℹ️ 맞춤법 교정 탭에서 '다음' 버튼을 클릭하세요.")
+            
+            # 모달 함수 호출
+            show_workflow_modal()
         
         # ============================================================
         # 최종 결과 비교 뷰 (팝업 종료 후)
