@@ -124,8 +124,11 @@ if uploaded_file:
                     # 초기 맞춤법 교정 실행
                     if 'modal_spell_check_result' not in st.session_state:
                         with st.spinner("맞춤법 교정 중입니다... ⏳"):
+                            import time
                             original = st.session_state['original_text']
+                            start_time = time.time()
                             json_data = analyze_and_correct_to_json(original)
+                            elapsed_time = time.time() - start_time
                             
                             if isinstance(json_data, dict) and 'error' in json_data:
                                 st.error(f"❌ 오류: {json_data['error']}")
@@ -133,6 +136,11 @@ if uploaded_file:
                             else:
                                 st.session_state['modal_draft_after_spell'] = original
                                 st.session_state['modal_spell_check_result'] = json_data
+                                # ✅ 성능 정보 표시
+                                if elapsed_time < 0.5:
+                                    st.success(f"⚡ 캐시 히트! {elapsed_time:.2f}초 (네트워크 요청 없음)")
+                                else:
+                                    st.info(f"📡 새로운 분석: {elapsed_time:.2f}초 소요")
                     
                     # 맞춤법 오류 목록 표시
                     if 'modal_spell_check_result' in st.session_state:
@@ -200,14 +208,22 @@ if uploaded_file:
                     # 초기 글쓰기 교정 실행
                     if 'modal_writing_feedback' not in st.session_state:
                         with st.spinner("글쓰기 교정 중입니다... ⏳"):
+                            import time
                             current_draft = st.session_state.get('modal_draft_after_spell', st.session_state['original_text'])
+                            start_time = time.time()
                             writing_feedback = correct_text(current_draft, "글쓰기 교정")
+                            elapsed_time = time.time() - start_time
                             
                             if isinstance(writing_feedback, dict) and 'error' in writing_feedback:
                                 st.error(f"❌ 오류: {writing_feedback['error']}")
                             else:
                                 st.session_state['modal_draft_after_writing'] = current_draft
                                 st.session_state['modal_writing_feedback'] = writing_feedback
+                                # ✅ 성능 정보 표시
+                                if elapsed_time < 0.5:
+                                    st.success(f"⚡ 캐시 히트! {elapsed_time:.2f}초 (네트워크 요청 없음)")
+                                else:
+                                    st.info(f"📡 새로운 분석: {elapsed_time:.2f}초 소요")
                     
                     # 글쓰기 교정 피드백 표시
                     if 'modal_writing_feedback' in st.session_state:
