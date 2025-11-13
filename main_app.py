@@ -20,12 +20,12 @@ from src.json_corrector import analyze_and_correct_to_json
 # -------------------------------------------------------
 # 🎨 UI 기본 설정
 # -------------------------------------------------------
-st.set_page_config(page_title="AI OCR + 맞춤법 교정기", page_icon="🧠", layout="wide")
-st.title("🧾 AI OCR + 맞춤법 교정기 (Google Vision + Gemini)")
+st.set_page_config(page_title="당신의 논설문을 고쳐드립니다! (ver.1.0)", page_icon="✍️", layout="wide")
+st.title("✍️ 당신의 논설문을 고쳐드립니다! (ver.1.0)")
 
 st.markdown("""
-이 앱은 PDF에서 문서를 자동으로 읽고  
-Google Gemini를 사용해 **맞춤법 교정 -> 글쓰기 교정**을 순차적으로 수행합니다. ✨
+PDF에서 문서를 자동으로 읽고 맞춤법을 검사한 후  
+Google Gemini를 사용해 **글쓰기를 개선**합니다. 🚀
 """)
 
 # -------------------------------------------------------
@@ -116,7 +116,8 @@ if uploaded_file:
                         incorrect_items = [it for it in json_data if not it.get('is_correct')]
                         
                         if not incorrect_items:
-                            st.success("🟢 오류 없음: 모든 문장이 올바릅니다.")
+                            st.success("🟢 완벽해요! 맞춤법 오류가 없습니다.")
+                            st.info("ℹ️ 완벽한 글이므로 바로 다음 단계로 진행할 수 있습니다.")
                         else:
                             st.subheader("🔴 발견된 맞춤법 오류:")
                             for i, item in enumerate(incorrect_items):
@@ -144,20 +145,24 @@ if uploaded_file:
                                 st.session_state['modal_draft_after_spell'] = edited_spell
                                 st.success("✅ 저장 완료")
                         with col2:
-                            if st.button("🔎 다시 검사", key="modal_recheck_spell", use_container_width=True):
-                                with st.spinner("재검사 중..."):
-                                    recheck = analyze_and_correct_to_json(edited_spell)
-                                    if isinstance(recheck, dict) and 'error' in recheck:
-                                        st.error(f"오류: {recheck['error']}")
-                                    else:
-                                        st.session_state['modal_spell_check_result'] = recheck
-                                        st.session_state['modal_draft_after_spell'] = edited_spell
-                                        remaining = [it for it in recheck if not it.get('is_correct')]
-                                        if not remaining:
-                                            st.success("🟢 재검사 완료: 오류 없음")
+                            # 오류가 없으면 "다시 검사" 버튼 비활성화, 있으면 활성화
+                            if incorrect_items:
+                                if st.button("🔎 다시 검사", key="modal_recheck_spell", use_container_width=True):
+                                    with st.spinner("재검사 중..."):
+                                        recheck = analyze_and_correct_to_json(edited_spell)
+                                        if isinstance(recheck, dict) and 'error' in recheck:
+                                            st.error(f"오류: {recheck['error']}")
                                         else:
-                                            st.warning(f"⚠️ 여전히 {len(remaining)}개 문장에 오류가 있습니다.")
-                                        st.rerun()
+                                            st.session_state['modal_spell_check_result'] = recheck
+                                            st.session_state['modal_draft_after_spell'] = edited_spell
+                                            remaining = [it for it in recheck if not it.get('is_correct')]
+                                            if not remaining:
+                                                st.success("🟢 재검사 완료: 오류 없음")
+                                            else:
+                                                st.warning(f"⚠️ 여전히 {len(remaining)}개 문장에 오류가 있습니다.")
+                                            st.rerun()
+                            else:
+                                st.button("🔎 다시 검사", key="modal_recheck_spell", use_container_width=True, disabled=True)
                         with col3:
                             if st.button("➡️ 다음", key="modal_next_spell", use_container_width=True):
                                 st.session_state['modal_draft_after_spell'] = edited_spell
