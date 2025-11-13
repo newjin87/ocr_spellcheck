@@ -110,6 +110,10 @@ if uploaded_file:
                 # 탭 2개: 맞춤법 교정, 글쓰기 교정
                 modal_tab1, modal_tab2 = st.tabs(["🔍 맞춤법 교정", "✍️ 글쓰기 교정"])
                 
+                # "다음" 버튼이 눌리면 탭 전환
+                if st.session_state.get('modal_proceed_to_writing', False):
+                    st.session_state['modal_current_tab'] = 1
+                
                 # ============================================================
                 # 모달 TAB 1: 맞춤법 교정
                 # ============================================================
@@ -184,8 +188,10 @@ if uploaded_file:
                                 st.button("🔎 다시 검사", key="modal_recheck_spell", use_container_width=True, disabled=True)
                         with col3:
                             if st.button("➡️ 다음", key="modal_next_spell", use_container_width=True):
+                                # 디버그: 상태 확인
                                 st.session_state['modal_draft_after_spell'] = edited_spell
                                 st.session_state['modal_proceed_to_writing'] = True
+                                st.info("✅ 글쓰기 교정 탭으로 이동합니다...")
                                 st.rerun()
                 
                 # ============================================================
