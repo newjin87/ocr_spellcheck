@@ -132,6 +132,13 @@ def fetch_ocr_result(prefix):
 # ----------------------------------------------------------------------
 def run_ocr_pipeline(uploaded_file):
     """Streamlit에서 업로드된 파일을 OCR 처리하고 텍스트 반환"""
+    # 🔐 사용자별 고유 세션 ID로 경로 격리
+    user_session_id = st.session_state.get('user_session_id', 'default')
+    user_output_prefix = f"ocr_results/{user_session_id}/"
+    
+    log(f"🔐 세션 ID: {user_session_id}")
+    log(f"📊 출력 경로: {user_output_prefix}")
+    
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp.write(uploaded_file.read())
         tmp_path = tmp.name
@@ -139,13 +146,13 @@ def run_ocr_pipeline(uploaded_file):
     log(f"📂 파일 업로드 완료: {uploaded_file.name}")
 
     client, bucket = refresh_gcs_client()
-    destination_blob_name = f"uploads/{os.path.basename(tmp_path)}"
+    destination_blob_name = f"uploads/{user_session_id}/{os.path.basename(tmp_path)}"
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(tmp_path)
     log(f"✅ GCS 업로드 완료: {destination_blob_name}")
 
-    perform_ocr(destination_blob_name, OUTPUT_PREFIX)
-    ocr_result = fetch_ocr_result(OUTPUT_PREFIX)
+    perform_ocr(destination_blob_name, user_output_prefix)
+    ocr_result = fetch_ocr_result(user_output_prefix)
 
     if ocr_result:
         text_blocks = [p["fullTextAnnotation"]["text"] for p in ocr_result["responses"] if "fullTextAnnotation" in p]
