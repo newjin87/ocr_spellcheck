@@ -107,17 +107,28 @@ if uploaded_file:
                 if 'modal_current_tab' not in st.session_state:
                     st.session_state['modal_current_tab'] = 0
                 
-                # 탭 2개: 맞춤법 교정, 글쓰기 교정
-                modal_tab1, modal_tab2 = st.tabs(["🔍 맞춤법 교정", "✍️ 글쓰기 교정"])
-                
                 # "다음" 버튼이 눌리면 탭 전환
                 if st.session_state.get('modal_proceed_to_writing', False):
                     st.session_state['modal_current_tab'] = 1
                 
+                # 탭 선택 (라디오 버튼으로 제어 가능)
+                tab_choice = st.radio(
+                    "단계 선택:",
+                    options=["🔍 맞춤법 교정", "✍️ 글쓰기 교정"],
+                    index=st.session_state.get('modal_current_tab', 0),
+                    horizontal=True,
+                    key="modal_tab_radio"
+                )
+                
+                # 선택된 탭에 따라 현재 탭 업데이트
+                st.session_state['modal_current_tab'] = 0 if tab_choice == "🔍 맞춤법 교정" else 1
+                
+                st.markdown("---")
+                
                 # ============================================================
                 # 모달 TAB 1: 맞춤법 교정
                 # ============================================================
-                with modal_tab1:
+                if st.session_state['modal_current_tab'] == 0:
                     st.subheader("🔍 맞춤법 교정")
                     
                     # 초기 맞춤법 교정 실행
@@ -197,7 +208,7 @@ if uploaded_file:
                 # ============================================================
                 # 모달 TAB 2: 글쓰기 교정
                 # ============================================================
-                with modal_tab2:
+                if st.session_state['modal_current_tab'] == 1:
                     st.subheader("✍️ 글쓰기 교정")
                     
                     # 맞춤법 교정 완료 체크
