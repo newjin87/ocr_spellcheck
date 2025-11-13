@@ -7,6 +7,17 @@ import re
 import traceback
 import hashlib
 
+# ✅ Gemini 모델 클라이언트를 캐시하여 반복 초기화 방지
+@st.cache_resource
+def get_gemini_model():
+    """Gemini 모델 인스턴스를 캐시하여 재사용"""
+    try:
+        api_key = st.secrets["gemini"]["api_key"]
+        genai.configure(api_key=api_key)
+        return genai.GenerativeModel("gemini-2.5-flash")
+    except Exception as e:
+        return None
+
 # ----------------------------------------------------------------------
 # 📝 JSON 출력 스키마 정의
 # ----------------------------------------------------------------------
@@ -46,16 +57,9 @@ def _call_gemini_api_cached(text_hash: str, prompt: str) -> dict:
     Returns:
         JSON 분석 결과 또는 오류 정보
     """
-    try:
-        api_key = st.secrets["gemini"]["api_key"]
-    except KeyError:
-        return {"error": "Gemini API 오류: '.streamlit/secrets.toml'에서 [gemini] 섹션 또는 'api_key' 키를 찾을 수 없습니다."}
-    
-    try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.5-flash")
-    except Exception as e:
-        return {"error": f"Gemini 클라이언트 초기화 실패: {e}"}
+    model = get_gemini_model()
+    if model is None:
+        return {"error": "Gemini 클라이언트 초기화 실패"}
 
     # 안전한 JSON 파싱 유틸리티
     def try_parse_json(text: str):

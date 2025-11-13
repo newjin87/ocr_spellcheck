@@ -2,11 +2,14 @@
 import streamlit as st
 import google.generativeai as genai
 # ✅ 새로 만든 모듈 import
-from src.json_corrector import analyze_and_correct_to_json 
+from src.json_corrector import analyze_and_correct_to_json, get_gemini_model
 import json
 import hashlib
 import time
 import traceback
+
+# ✅ Gemini 모델 클라이언트를 캐시하여 반복 초기화 방지
+# (get_gemini_model()은 json_corrector에서 import됨)
 
 # ✅ 텍스트 해시 함수
 def get_text_hash(text: str) -> str:
@@ -26,16 +29,9 @@ def _call_gemini_writing_api_cached(text_hash: str, prompt: str) -> str:
     Returns:
         글쓰기 교정 결과 (문자열)
     """
-    try:
-        api_key = st.secrets["gemini"]["api_key"]
-    except KeyError:
-        return "❌ Gemini API 오류: '.streamlit/secrets.toml'에서 [gemini] 섹션 또는 'api_key' 키를 찾을 수 없습니다."
-    
-    try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.5-flash")
-    except Exception as e:
-        return f"❌ Gemini 클라이언트 초기화 실패: {e}"
+    model = get_gemini_model()
+    if model is None:
+        return "❌ Gemini 클라이언트 초기화 실패"
 
     max_retries = 3
     base_delay = 1.0
