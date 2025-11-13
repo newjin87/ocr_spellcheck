@@ -323,10 +323,20 @@ if uploaded_file:
                 )
             with col3:
                 if st.button("🔄 처음으로", use_container_width=True, key="reset_button"):
-                    # 모든 상태 초기화
+                    # 모달 상태 초기화 (탭을 0으로 명시)
+                    st.session_state['modal_current_tab'] = 0
+                    st.session_state['show_workflow_modal'] = False
+                    
+                    # 모든 모달 관련 상태 삭제
                     for key in list(st.session_state.keys()):
-                        if key.startswith('modal_') or key in ['original_text', 'workflow_completed', 'final_text', 'show_workflow_modal']:
+                        if key.startswith('modal_'):
                             del st.session_state[key]
+                    
+                    # 다른 상태도 초기화
+                    for key in ['original_text', 'workflow_completed', 'final_text']:
+                        if key in st.session_state:
+                            del st.session_state[key]
+                    
                     st.rerun()
     else:
         st.error("❌ OCR에서 텍스트를 추출하지 못했습니다. 로그를 확인하세요.")
