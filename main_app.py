@@ -89,6 +89,10 @@ if uploaded_file:
         if st.session_state.get('show_workflow_modal', False):
             @st.dialog("🚀 글 고쳐쓰기 워크플로우", width="large")
             def show_workflow_modal():
+                # 초기화
+                if 'modal_current_tab' not in st.session_state:
+                    st.session_state['modal_current_tab'] = 0
+                
                 # 탭 2개: 맞춤법 교정, 글쓰기 교정
                 modal_tab1, modal_tab2 = st.tabs(["🔍 맞춤법 교정", "✍️ 글쓰기 교정"])
                 
@@ -99,13 +103,14 @@ if uploaded_file:
                     st.subheader("🔍 맞춤법 교정")
                     
                     # 초기 맞춤법 교정 실행
-                    if 'modal_draft_after_spell' not in st.session_state:
+                    if 'modal_spell_check_result' not in st.session_state:
                         with st.spinner("맞춤법 교정 중입니다... ⏳"):
                             original = st.session_state['original_text']
                             json_data = analyze_and_correct_to_json(original)
                             
                             if isinstance(json_data, dict) and 'error' in json_data:
                                 st.error(f"❌ 오류: {json_data['error']}")
+                                st.session_state['modal_spell_check_result'] = []
                             else:
                                 st.session_state['modal_draft_after_spell'] = original
                                 st.session_state['modal_spell_check_result'] = json_data
@@ -145,7 +150,7 @@ if uploaded_file:
                                 st.session_state['modal_draft_after_spell'] = edited_spell
                                 st.success("✅ 저장 완료")
                         with col2:
-                            # 오류가 없으면 "다시 검사" 버튼 비활성화, 있으면 활성화
+                            # 오류가 없으면 "다시 검사" 버튼 비활성화
                             if incorrect_items:
                                 if st.button("🔎 다시 검사", key="modal_recheck_spell", use_container_width=True):
                                     with st.spinner("재검사 중..."):
@@ -175,10 +180,12 @@ if uploaded_file:
                 with modal_tab2:
                     st.subheader("✍️ 글쓰기 교정")
                     
-                    # 글쓰기 교정만 맞춤법 교정이 먼저 완료되었을 때 표시
-                    if st.session_state.get('modal_proceed_to_writing', False):
+                    # 맞춤법 교정 완료 체크
+                    if not st.session_state.get('modal_proceed_to_writing', False):
+                        st.info("ℹ️ 맞춤법 교정 탭에서 '다음' 버튼을 클릭하세요.")
+                    else:
                         # 초기 글쓰기 교정 실행
-                        if 'modal_draft_after_writing' not in st.session_state:
+                        if 'modal_writing_feedback' not in st.session_state:
                             with st.spinner("글쓰기 교정 중입니다... ⏳"):
                                 current_draft = st.session_state.get('modal_draft_after_spell', st.session_state['original_text'])
                                 writing_feedback = correct_text(current_draft, "글쓰기 교정")
@@ -234,8 +241,6 @@ if uploaded_file:
                                 st.session_state['workflow_completed'] = True
                                 st.session_state['show_workflow_modal'] = False
                                 st.rerun()
-                    else:
-                        st.info("ℹ️ 맞춤법 교정 탭에서 '다음' 버튼을 클릭하세요.")
             
             # 모달 함수 호출
             show_workflow_modal()
