@@ -13,6 +13,20 @@ Streamlit 통합 실행 파일 (모달 팝업 워크플로우)
 """
 
 import streamlit as st
+import uuid
+from datetime import datetime
+
+# 사용자별 고유 세션 ID 생성 (중요!)
+if 'user_session_id' not in st.session_state:
+    st.session_state.user_session_id = str(uuid.uuid4())[:8]
+    st.session_state.session_start_time = datetime.now()
+
+# 사용자별 독립적인 임시 디렉토리
+import tempfile
+import os
+USER_TEMP_DIR = os.path.join(tempfile.gettempdir(), f"streamlit_{st.session_state.user_session_id}")
+os.makedirs(USER_TEMP_DIR, exist_ok=True)
+
 from src.vision_ocr import run_ocr_pipeline
 from src.spell_corrector import correct_text
 from src.json_corrector import analyze_and_correct_to_json
