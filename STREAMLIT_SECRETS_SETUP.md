@@ -45,7 +45,7 @@ client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/ocr-se
 universe_domain = "googleapis.com"
 
 [gemini]
-api_key = "AIzaSyDKXOfhVSC1RnXpm2uaua082hpkjINOfqU"
+api_key = "YOUR_GEMINI_API_KEY"
 ```
 
 ### **Step 4: Save 버튼 클릭**
