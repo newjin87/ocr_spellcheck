@@ -34,8 +34,8 @@ from src.json_corrector import analyze_and_correct_to_json
 # -------------------------------------------------------
 # 🎨 UI 기본 설정
 # -------------------------------------------------------
-st.set_page_config(page_title="당신의 논설문을 고쳐드립니다! (ver.1.2.1)", page_icon="✍️", layout="wide")
-st.title("✍️ 당신의 논설문을 고쳐드립니다! (ver.1.2.1)")
+st.set_page_config(page_title="당신의 논설문을 고쳐드립니다! (ver.1.2.2)", page_icon="✍️", layout="wide")
+st.title("✍️ 당신의 논설문을 고쳐드립니다! (ver.1.2.2)")
 
 st.markdown("""
 PDF에서 문서를 자동으로 읽고 맞춤법을 검사한 후  
@@ -107,21 +107,11 @@ if uploaded_file:
                 if 'modal_current_tab' not in st.session_state:
                     st.session_state['modal_current_tab'] = 0
                 
-                # "다음" 버튼이 눌리면 탭 전환
-                if st.session_state.get('modal_proceed_to_writing', False):
-                    st.session_state['modal_current_tab'] = 1
-                
-                # 탭 선택 (라디오 버튼으로 제어 가능)
-                tab_choice = st.radio(
-                    "단계 선택:",
-                    options=["🔍 맞춤법 교정", "✍️ 글쓰기 교정"],
-                    index=st.session_state.get('modal_current_tab', 0),
-                    horizontal=True,
-                    key="modal_tab_radio"
-                )
-                
-                # 선택된 탭에 따라 현재 탭 업데이트
-                st.session_state['modal_current_tab'] = 0 if tab_choice == "🔍 맞춤법 교정" else 1
+                # 탭 헤더 표시 (선택 불가, 상태 표시만)
+                if st.session_state['modal_current_tab'] == 0:
+                    st.markdown("### 🔍 1단계: 맞춤법 교정")
+                else:
+                    st.markdown("### ✍️ 2단계: 글쓰기 교정")
                 
                 st.markdown("---")
                 
@@ -199,79 +189,71 @@ if uploaded_file:
                                 st.button("🔎 다시 검사", key="modal_recheck_spell", use_container_width=True, disabled=True)
                         with col3:
                             if st.button("➡️ 다음", key="modal_next_spell", use_container_width=True):
-                                # 디버그: 상태 확인
                                 st.session_state['modal_draft_after_spell'] = edited_spell
-                                st.session_state['modal_proceed_to_writing'] = True
-                                st.info("✅ 글쓰기 교정 탭으로 이동합니다...")
+                                st.session_state['modal_current_tab'] = 1
                                 st.rerun()
                 
                 # ============================================================
                 # 모달 TAB 2: 글쓰기 교정
                 # ============================================================
                 if st.session_state['modal_current_tab'] == 1:
-                    st.subheader("✍️ 글쓰기 교정")
+                    # 초기 글쓰기 교정 실행
+                    if 'modal_writing_feedback' not in st.session_state:
+                        with st.spinner("글쓰기 교정 중입니다... ⏳"):
+                            current_draft = st.session_state.get('modal_draft_after_spell', st.session_state['original_text'])
+                            writing_feedback = correct_text(current_draft, "글쓰기 교정")
+                            
+                            if isinstance(writing_feedback, dict) and 'error' in writing_feedback:
+                                st.error(f"❌ 오류: {writing_feedback['error']}")
+                            else:
+                                st.session_state['modal_draft_after_writing'] = current_draft
+                                st.session_state['modal_writing_feedback'] = writing_feedback
                     
-                    # 맞춤법 교정 완료 체크
-                    if not st.session_state.get('modal_proceed_to_writing', False):
-                        st.info("ℹ️ 맞춤법 교정 탭에서 '다음' 버튼을 클릭하세요.")
-                    else:
-                        # 초기 글쓰기 교정 실행
-                        if 'modal_writing_feedback' not in st.session_state:
-                            with st.spinner("글쓰기 교정 중입니다... ⏳"):
-                                current_draft = st.session_state.get('modal_draft_after_spell', st.session_state['original_text'])
-                                writing_feedback = correct_text(current_draft, "글쓰기 교정")
-                                
-                                if isinstance(writing_feedback, dict) and 'error' in writing_feedback:
-                                    st.error(f"❌ 오류: {writing_feedback['error']}")
-                                else:
-                                    st.session_state['modal_draft_after_writing'] = current_draft
-                                    st.session_state['modal_writing_feedback'] = writing_feedback
-                        
-                        # 글쓰기 교정 피드백 표시
-                        if 'modal_writing_feedback' in st.session_state:
-                            st.subheader("📝 교사 평가 및 고쳐쓰기 제안")
-                            feedback = st.session_state['modal_writing_feedback']
-                            st.text_area(
-                                "평가 및 제안 (읽기 전용):",
-                                value=feedback if isinstance(feedback, str) else str(feedback),
-                                height=200,
-                                disabled=True,
-                                key="modal_feedback_display"
-                            )
-                        
-                        # 글쓰기 교정 후 글 편집 영역
-                        st.markdown("---")
-                        st.subheader("✍️ 글쓰기 교정 후 글 편집")
-                        edited_writing = st.text_area(
-                            "글쓰기 교정 후 글 (편집 가능):",
-                            value=st.session_state.get('modal_draft_after_writing', st.session_state['original_text']),
+                    # 글쓰기 교정 피드백 표시
+                    if 'modal_writing_feedback' in st.session_state:
+                        st.subheader("📝 교사 평가 및 고쳐쓰기 제안")
+                        feedback = st.session_state['modal_writing_feedback']
+                        st.text_area(
+                            "평가 및 제안 (읽기 전용):",
+                            value=feedback if isinstance(feedback, str) else str(feedback),
                             height=200,
-                            key="modal_edit_after_writing"
+                            disabled=True,
+                            key="modal_feedback_display"
                         )
-                        
-                        col1, col2, col3 = st.columns([1, 1, 1])
-                        with col1:
-                            if st.button("💾 저장", key="modal_save_writing", use_container_width=True):
-                                st.session_state['modal_draft_after_writing'] = edited_writing
-                                st.success("✅ 저장 완료")
-                        with col2:
-                            if st.button("🔎 다시 평가", key="modal_recheck_writing", use_container_width=True):
-                                with st.spinner("재평가 중..."):
-                                    refeedback = correct_text(edited_writing, "글쓰기 교정")
-                                    if isinstance(refeedback, dict) and 'error' in refeedback:
-                                        st.error(f"오류: {refeedback['error']}")
-                                    else:
-                                        st.session_state['modal_writing_feedback'] = refeedback
-                                        st.session_state['modal_draft_after_writing'] = edited_writing
-                                        st.success("✅ 재평가 완료!")
-                                        st.rerun()
-                        with col3:
-                            if st.button("✅ 완성!", key="modal_finish", use_container_width=True):
-                                st.session_state['modal_draft_after_writing'] = edited_writing
-                                st.session_state['final_text'] = edited_writing
-                                st.session_state['workflow_completed'] = True
-                                st.session_state['show_workflow_modal'] = False
-                                st.rerun()
+                    
+                    # 글쓰기 교정 후 글 편집 영역
+                    st.markdown("---")
+                    st.subheader("✍️ 글쓰기 교정 후 글 편집")
+                    edited_writing = st.text_area(
+                        "글쓰기 교정 후 글 (편집 가능):",
+                        value=st.session_state.get('modal_draft_after_writing', st.session_state['original_text']),
+                        height=200,
+                        key="modal_edit_after_writing"
+                    )
+                    
+                    col1, col2, col3 = st.columns([1, 1, 1])
+                    with col1:
+                        if st.button("💾 저장", key="modal_save_writing", use_container_width=True):
+                            st.session_state['modal_draft_after_writing'] = edited_writing
+                            st.success("✅ 저장 완료")
+                    with col2:
+                        if st.button("🔎 다시 평가", key="modal_recheck_writing", use_container_width=True):
+                            with st.spinner("재평가 중..."):
+                                refeedback = correct_text(edited_writing, "글쓰기 교정")
+                                if isinstance(refeedback, dict) and 'error' in refeedback:
+                                    st.error(f"오류: {refeedback['error']}")
+                                else:
+                                    st.session_state['modal_writing_feedback'] = refeedback
+                                    st.session_state['modal_draft_after_writing'] = edited_writing
+                                    st.success("✅ 재평가 완료!")
+                                    st.rerun()
+                    with col3:
+                        if st.button("✅ 완성!", key="modal_finish", use_container_width=True):
+                            st.session_state['modal_draft_after_writing'] = edited_writing
+                            st.session_state['final_text'] = edited_writing
+                            st.session_state['workflow_completed'] = True
+                            st.session_state['show_workflow_modal'] = False
+                            st.rerun()
             
             # 모달 함수 호출
             show_workflow_modal()
