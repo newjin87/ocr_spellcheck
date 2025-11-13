@@ -23,9 +23,14 @@ import logging
 # -----------------------------------------------------------------------
 # ✅ 1️⃣ 인증 설정
 # -----------------------------------------------------------------------
-raw_info = dict(st.secrets["gcp_service_account"])
-raw_info["private_key"] = raw_info["private_key"].replace("\\n", "\n")
-gcp_credentials = service_account.Credentials.from_service_account_info(raw_info)
+try:
+    raw_info = dict(st.secrets["gcp_service_account"])
+    raw_info["private_key"] = raw_info["private_key"].replace("\\n", "\n")
+    gcp_credentials = service_account.Credentials.from_service_account_info(raw_info)
+    print("✅ Google Cloud 인증 성공")
+except Exception as e:
+    print(f"❌ Google Cloud 인증 실패: {e}")
+    gcp_credentials = None
 
 # -----------------------------------------------------------------------
 # 🧠 2️⃣ 로깅 유틸리티
@@ -51,13 +56,21 @@ def perform_ocr_local(pdf_path):
     GCS 버킷을 사용하지 않고 로컬 메모리에서 직접 처리
     """
     try:
+        if gcp_credentials is None:
+            log("❌ Google Cloud 인증 정보가 없습니다.")
+            return None
+        
+        log(f"🔐 Vision API 클라이언트 초기화...")
         client = vision.ImageAnnotatorClient(credentials=gcp_credentials)
         
         log(f"📂 로컬 파일에서 OCR 시작: {os.path.basename(pdf_path)}")
+        log(f"📊 파일 크기: {os.path.getsize(pdf_path)} bytes")
         
         # PDF를 바이너리로 읽기
         with open(pdf_path, 'rb') as image_file:
             content = image_file.read()
+        
+        log(f"📖 PDF 읽음: {len(content)} bytes")
         
         # Vision API 요청 (로컬 파일 기반)
         image = vision.Image(content=content)
@@ -66,13 +79,20 @@ def perform_ocr_local(pdf_path):
             features=[vision.Feature(type_=vision.Feature.Type.DOCUMENT_TEXT_DETECTION)]
         )
         
+        log("🚀 Vision API 호출 중...")
         response = client.annotate_image(request)
         log("✅ Vision API OCR 처리 완료")
+        
+        # 응답 상태 확인
+        if response.error.message:
+            log(f"⚠️ Vision API 응답 오류: {response.error.message}")
         
         return response
         
     except Exception as e:
+        import traceback
         log(f"❌ OCR 처리 중 오류: {str(e)}")
+        log(f"🔍 스택트레이스: {traceback.format_exc()}")
         return None
 
 # -----------------------------------------------------------------------
@@ -81,19 +101,23 @@ def perform_ocr_local(pdf_path):
 def extract_text_from_response(response):
     """Vision API 응답에서 텍스트 추출"""
     if not response:
+        log("⚠️ Vision API 응답이 None입니다.")
         return None
     
-    if response.error.message:
+    if hasattr(response, 'error') and response.error and response.error.message:
         log(f"❌ Vision API 오류: {response.error.message}")
         return None
     
     # fullTextAnnotation에서 전체 텍스트 추출
-    if response.full_text_annotation:
+    if hasattr(response, 'full_text_annotation') and response.full_text_annotation:
         full_text = response.full_text_annotation.text
         log(f"📄 추출된 텍스트 길이: {len(full_text)} 글자")
+        if len(full_text.strip()) == 0:
+            log("⚠️ 추출된 텍스트가 비어있습니다.")
+            return None
         return full_text
     else:
-        log("⚠️ 텍스트 추출 실패")
+        log("⚠️ 텍스트 추출 실패: full_text_annotation이 없습니다.")
         return None
 
 # -----------------------------------------------------------------------
@@ -135,15 +159,17 @@ def run_ocr_pipeline(uploaded_file):
             os.remove(tmp_path)
             log("🧹 임시 파일 정리 완료")
         except:
-            pass
+            log("⚠️ 임시 파일 정리 실패 (무시함)")
         
         if full_text:
             log("🎉 OCR 결과를 성공적으로 불러왔습니다.")
             return full_text
         else:
-            log("❌ OCR 결과를 가져오지 못했습니다.")
+            log("❌ OCR 결과: 텍스트를 추출할 수 없습니다.")
             return None
             
     except Exception as e:
+        import traceback
         log(f"❌ OCR 파이프라인 오류: {str(e)}")
+        log(f"🔍 스택트레이스: {traceback.format_exc()}")
         return None
