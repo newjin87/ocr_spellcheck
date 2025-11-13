@@ -1,18 +1,51 @@
 # Python Virtual Environment
 .venv/
 .python-version
+venv/
+env/
 
 # Streamlit Secrets (API 키, GCP 서비스 계정 정보 포함)
 .streamlit/secrets.toml
+.streamlit/secrets.local.toml
 
 # Python Cache and Build Files
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 dist/
+build/
 *.egg-info/
+.egg
 
 # macOS files
 .DS_Store
+.AppleDouble
+.LSOverride
 
-# Google Cloud Service Account JSON (로컬에 저장했다면)
+# Google Cloud Service Account JSON (민감 정보)
 *.json
+korean-spelling-app-*.json
+service-account-*.json
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
