@@ -5,6 +5,7 @@ import json
 import time
 import re
 import traceback
+import hashlib
 
 # ----------------------------------------------------------------------
 # 📝 JSON 출력 스키마 정의
@@ -27,48 +28,43 @@ JSON_SCHEMA = """
 ]
 """
 
-# ----------------------------------------------------------------------
-# ⚙️ JSON 교정 핵심 함수
-# ----------------------------------------------------------------------
-def analyze_and_correct_to_json(text: str):
+# ✅ 텍스트 해시 함수 (캐싱 키 생성용)
+def get_text_hash(text: str) -> str:
+    """텍스트의 SHA256 해시를 생성하여 캐시 키로 사용"""
+    return hashlib.sha256(text.encode('utf-8')).hexdigest()
+
+# ✅ @st.cache_data로 Gemini API 호출 결과 캐싱
+@st.cache_data(ttl=3600)
+def _call_gemini_api_cached(text_hash: str, prompt: str) -> dict:
     """
-    텍스트를 분석하여 맞춤법 오류를 찾아 JSON 구조로 반환합니다.
+    Gemini API를 호출하고 결과를 캐싱합니다.
+    
+    Args:
+        text_hash: 텍스트의 SHA256 해시 (캐싱 키)
+        prompt: Gemini 모델에 보낼 프롬프트
+    
+    Returns:
+        JSON 분석 결과 또는 오류 정보
     """
     try:
-        # ✅ 키 로드 (secrets.toml의 [gemini] api_key와 일치)
         api_key = st.secrets["gemini"]["api_key"]
     except KeyError:
         return {"error": "Gemini API 오류: '.streamlit/secrets.toml'에서 [gemini] 섹션 또는 'api_key' 키를 찾을 수 없습니다."}
     
     try:
         genai.configure(api_key=api_key)
-        # ✅ JSON 출력에 안정적인 최신 모델 사용
-        model = genai.GenerativeModel("gemini-2.5-flash") 
+        model = genai.GenerativeModel("gemini-2.5-flash")
     except Exception as e:
         return {"error": f"Gemini 클라이언트 초기화 실패: {e}"}
 
-    # 1. 프롬프트 구성 (역할 부여 및 JSON 스키마 명시)
-    prompt = (
-        f"당신은 한국어 맞춤법 및 문법 분석 전문가입니다. "
-        f"다음 텍스트를 문장 단위로 나누어 분석하고, 모든 오류(맞춤법, 띄어쓰기, 문법)를 찾아 {JSON_SCHEMA} 형식의 JSON 배열로만 반환하세요. "
-        f"오류가 없으면 'is_correct'를 true로, 'corrections'는 빈 배열로 설정해야 합니다. "
-        f"반드시 JSON만 출력해야 합니다. 원본 텍스트:\n\n{text}"
-    )
-
-    # 🟢 UnboundLocalError 해결: response 변수를 미리 None으로 초기화
-    response = None
-
-    # 안전한 JSON 파싱 유틸리티: 문자열에서 JSON 배열/객체 부분을 추출해 파싱 시도
+    # 안전한 JSON 파싱 유틸리티
     def try_parse_json(text: str):
         text = text.strip()
-        # 빠른 시도
         try:
             return json.loads(text)
         except Exception:
             pass
 
-        # 배열 또는 객체의 첫/마지막 괄호 위치를 찾아 부분 문자열로 파싱 시도
-        # 우선 배열 '[ ... ]' 탐색
         arr_match = re.search(r"(\[.*\])", text, re.S)
         if arr_match:
             try:
@@ -76,7 +72,6 @@ def analyze_and_correct_to_json(text: str):
             except Exception:
                 pass
 
-        # 객체 '{ ... }' 탐색
         obj_match = re.search(r"(\{.*\})", text, re.S)
         if obj_match:
             try:
@@ -84,41 +79,32 @@ def analyze_and_correct_to_json(text: str):
             except Exception:
                 pass
 
-        # 실패
         raise ValueError("응답에서 JSON을 파싱할 수 없습니다.")
 
-    # 재시도/백오프 설정
+    response = None
     max_retries = 3
     base_delay = 1.0
 
-    last_exc = None
     for attempt in range(1, max_retries + 1):
         try:
-            # 2. Gemini API 호출
             response = model.generate_content(contents=prompt)
 
-            # 3. 모델이 반환한 JSON 문자열을 파이썬 객체로 변환
             if hasattr(response, 'text') and response.text:
                 try:
                     json_data = try_parse_json(response.text)
                     return json_data
                 except Exception as parse_err:
-                    # 파싱 실패는 재시도하지 않고 오류로 반환 (모델 출력 교정 필요)
                     tb = traceback.format_exc()
                     return {"error": f"JSON 파싱 실패: {parse_err}. 응답 일부: {response.text[:200]}", "trace": tb}
             else:
-                # 응답이 비어있는 경우 재시도
                 raise RuntimeError("응답 텍스트가 비어있습니다.")
 
         except Exception as e:
-            last_exc = e
-            # 내부 서버 오류(500)등 일시적 오류일 경우 재시도
             if attempt < max_retries:
                 delay = base_delay * (2 ** (attempt - 1))
                 time.sleep(delay)
                 continue
             else:
-                # 최대 재시도 후 실패: 더 자세한 정보 반환
                 resp_snippet = None
                 try:
                     if response is not None and hasattr(response, 'text'):
@@ -128,3 +114,25 @@ def analyze_and_correct_to_json(text: str):
 
                 tb = traceback.format_exc()
                 return {"error": f"Gemini JSON API 호출 오류 (attempts={max_retries}): {e}", "response_snippet": resp_snippet, "trace": tb}
+
+# -------------------------------------------------------
+# ⚙️ JSON 교정 핵심 함수
+# -------------------------------------------------------
+def analyze_and_correct_to_json(text: str):
+    """
+    텍스트를 분석하여 맞춤법 오류를 찾아 JSON 구조로 반환합니다.
+    ✅ 동일한 텍스트는 캐시된 결과를 즉시 반환합니다 (네트워크 요청 없음).
+    """
+    # 1. 프롬프트 구성
+    prompt = (
+        f"당신은 한국어 맞춤법 및 문법 분석 전문가입니다. "
+        f"다음 텍스트를 문장 단위로 나누어 분석하고, 모든 오류(맞춤법, 띄어쓰기, 문법)를 찾아 {JSON_SCHEMA} 형식의 JSON 배열로만 반환하세요. "
+        f"오류가 없으면 'is_correct'를 true로, 'corrections'는 빈 배열로 설정해야 합니다. "
+        f"반드시 JSON만 출력해야 합니다. 원본 텍스트:\n\n{text}"
+    )
+    
+    # 2. 텍스트 해시 생성 (캐싱 키)
+    text_hash = get_text_hash(text)
+    
+    # 3. 캐시된 API 호출 (동일 텍스트면 네트워크 요청 없음)
+    return _call_gemini_api_cached(text_hash, prompt)
